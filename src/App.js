@@ -1,219 +1,151 @@
+import {useState} from 'react'
+import AddTaskForm from './components/AddTaskForm.jsx'
+import UpdateForm from './components/UpdateForm.jsx'
+import ToDo from './components/ToDo.jsx'
 
-// File: src/App.js
+import 'bootstrap/dist/css/bootstrap.min.css'
 
-import { useState, useEffect } from 'react';
-import AddTaskForm from './components/AddTaskForm.jsx';
-import UpdateForm from './components/UpdateForm.jsx';
-import ToDo from './components/ToDo.jsx';
-import AWS from 'aws-sdk';
-import { CognitoUserPool, AuthenticationDetails, CognitoUser } from 'amazon-cognito-identity-js';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './App.css';
-
-// AWS Cognito and S3 Configuration
-const poolData = {
-  UserPoolId: 'YOUR_USER_POOL_ID',
-  ClientId: 'YOUR_CLIENT_ID',
-};
-const userPool = new CognitoUserPool(poolData);
-const identityPoolId = 'YOUR_IDENTITY_POOL_ID';
-const region = 'YOUR_AWS_REGION';
-const bucketName = 'your-bucket-name';
-
-// Configure AWS S3
-AWS.config.update({
-  region: region,
-});
-
-const s3 = new AWS.S3();
+import './App.css'
 
 function App() {
-  const [toDo, setToDo] = useState([]);
-  const [newTask, setNewTask] = useState('');
-  const [newTaskDueDate, setNewTaskDueDate] = useState(''); // Store due date and time
-  const [newTaskRepetition, setNewTaskRepetition] = useState('none'); // Repetition pattern
-  const [updateData, setUpdateData] = useState('');
-  const [userId, setUserId] = useState(null); // Store logged-in user ID
 
-  // Timer to check tasks every minute
-  useEffect(() => {
-    authenticateUser();
-    const timer = setInterval(checkTasksDue, 60000); // Check every 60 seconds
-    return () => clearInterval(timer); // Clean up timer when component unmounts
-  }, [toDo]);
+  // Tasks (ToDo List) State
+  //////////////////////////
+  const [toDo, setToDo] = useState([
+    {id: 1, title: 'Task 1', status: false},
+    {id: 2, title: 'Task 2', status: false}
+  ])
 
-  const authenticateUser = () => {
-    const username = 'user@example.com'; // Replace with form input
-    const password = 'user-password'; // Replace with form input
+  // Temp State
+  /////////////
+  const [newTask, setNewTask] = useState('')
+  const [updateData, setUpdateData] = useState('')
 
-    const authenticationDetails = new AuthenticationDetails({
-      Username: username,
-      Password: password,
-    });
+  // Add task 
+  ///////////
+  const addTask = () => {
+    if(newTask) {
+      let num = toDo.length + 1 
+      
+      // let newEntry = { id: num, title: newTask, status: false }
+      // setToDo([...toDo, newEntry])
 
-    const cognitoUser = new CognitoUser({
-      Username: username,
-      Pool: userPool,
-    });
+      // refactored
+      setToDo([
+        ...toDo, 
+        { id: num, title: newTask, status: false }
+      ])
 
-    cognitoUser.authenticateUser(authenticationDetails, {
-      onSuccess: (session) => {
-        const idToken = session.getIdToken().getJwtToken();
-        const userId = session.getIdToken().payload.sub; // Get the unique Cognito user ID
-        setUserId(userId);
+      setNewTask('')
 
-        // Configure AWS credentials using the Cognito Identity Pool
-        AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-          IdentityPoolId: identityPoolId,
-          Logins: {
-            [`cognito-idp.${region}.amazonaws.com/${poolData.UserPoolId}`]: idToken,
-          },
-        });
-
-        // Fetch tasks from S3 after successful authentication
-        fetchTasksFromS3(userId);
-      },
-      onFailure: (err) => {
-        console.error('Authentication failed:', err);
-      },
-    });
-  };
-
-  // Fetch tasks from S3 bucket for the logged-in user
-  const fetchTasksFromS3 = async (userId) => {
-    try {
-      const params = {
-        Bucket: bucketName,
-        Key: `user-tasks/${userId}.json`,
-      };
-      const data = await s3.getObject(params).promise();
-      const tasks = JSON.parse(data.Body.toString());
-      setToDo(tasks);
-    } catch (err) {
-      console.error('Error fetching tasks from S3:', err);
     }
-  };
+  }
 
-  // Save tasks to S3 for the logged-in user
-  const saveTasksToS3 = async (tasks) => {
-    if (!userId) return;
-    try {
-      const params = {
-        Bucket: bucketName,
-        Key: `user-tasks/${userId}.json`,
-        Body: JSON.stringify(tasks),
-        ContentType: 'application/json',
-      };
-      await s3.putObject(params).promise();
-    } catch (err) {
-      console.error('Error saving tasks to S3:', err);
-    }
-  };
+  // Delete task 
+  //////////////
+  const deleteTask = (id) => {
+    
+    // let newTasks = toDo.filter( task => task.id !== id)
+    // setToDo(newTasks)
 
-  // Add task
-  const addTask = async () => {
-    if (newTask) {
-      const num = toDo.length + 1;
-      const newEntry = {
-        id: num,
-        title: newTask,
-        status: false,
-        dueDate: new Date(newTaskDueDate).toISOString(),
-        repetition: newTaskRepetition,
-      };
-      const updatedToDo = [...toDo, newEntry];
-      setToDo(updatedToDo);
-      setNewTask('');
-      setNewTaskDueDate('');
-      setNewTaskRepetition('none');
+    // refactored
+    setToDo(toDo.filter(task => task.id !== id))
 
-      // Save the updated list to S3
-      await saveTasksToS3(updatedToDo);
-    }
-  };
+  }
 
-  // Delete task
-  const deleteTask = async (id) => {
-    const updatedToDo = toDo.filter((task) => task.id !== id);
-    setToDo(updatedToDo);
-    await saveTasksToS3(updatedToDo);
-  };
+  // Mark task as done or completed
+  /////////////////////////////////
+  const markDone = (id) => {
+    
+    // let newTask = toDo.map( task => {
+    //   if( task.id === id ) {
+    //     return ({ ...task, status: !task.status })
+    //   } 
+    //   return task
+    // })
+    // setToDo(newTask)
 
-  // Mark task as done
-  const markDone = async (id) => {
-    const updatedToDo = toDo.map((task) =>
-      task.id === id ? { ...task, status: !task.status } : task
-    );
-    setToDo(updatedToDo);
-    await saveTasksToS3(updatedToDo);
-  };
+    // refactored
+    setToDo(toDo.map(
+      task => task.id === id 
+      ? ({ ...task, status: !task.status }) 
+      : (task) 
+    ))
+
+  }
+
+  // Cancel update
+  ////////////////
+  const cancelUpdate = () => {
+    setUpdateData('')
+  }
+
+  // Change task for update
+  /////////////////////////
+  const changeHolder = (e) => {
+
+    // let newEntry = {
+    //   id: updateData.id,
+    //   title: e.target.value,
+    //   status: updateData.status ? true : false
+    // }
+    // setUpdateData(newEntry)
+
+    // refactored
+    setUpdateData({...updateData, title: e.target.value})
+
+  }
 
   // Update task
-  const updateTask = async () => {
-    const removeOldRecord = toDo.filter((task) => task.id !== updateData.id);
-    const updatedToDo = [...removeOldRecord, updateData];
-    setToDo(updatedToDo);
-    setUpdateData('');
-    await saveTasksToS3(updatedToDo);
-  };
+  //////////////
+  const updateTask = () => {
+    
+    // let filterRecords = [...toDo].filter( task => task.id !== updateData.id )
+    // let updatedObject = [...filterRecords, updateData]
+    // setToDo(updatedObject)
 
-  // Check if any tasks are due and notify the user
-  const checkTasksDue = () => {
-    const now = new Date();
-    toDo.forEach((task) => {
-      const dueDate = new Date(task.dueDate);
-      if (dueDate <= now && !task.status) {
-        // Task is due, notify the user
-        alert(`Task "${task.title}" is due!`);
+    // refactored
+    let removeOldRecord = [...toDo].filter(task => task.id !== updateData.id)
+    setToDo([
+      ...removeOldRecord, 
+      updateData
+    ])
+    
+    setUpdateData('')
 
-        // Handle task repetition (daily, weekly, etc.)
-        if (task.repetition === 'daily') {
-          task.dueDate = new Date(dueDate.setDate(dueDate.getDate() + 1)).toISOString();
-        } else if (task.repetition === 'weekly') {
-          task.dueDate = new Date(dueDate.setDate(dueDate.getDate() + 7)).toISOString();
-        } else if (task.repetition === 'monthly') {
-          task.dueDate = new Date(dueDate.setMonth(dueDate.getMonth() + 1)).toISOString();
-        }
-
-        // Update the tasks list and save it
-        setToDo([...toDo]);
-        saveTasksToS3([...toDo]);
-      }
-    });
-  };
+  }
 
   return (
     <div className="container App">
-      <br />
-      <br />
-      <h2>To Do List App with Timers (ReactJS)</h2>
-      <br />
-      <br />
 
-      {updateData && updateData ? (
-        <UpdateForm
-          updateData={updateData}
-          changeHolder={(e) => setUpdateData({ ...updateData, title: e.target.value })}
-          updateTask={updateTask}
-          cancelUpdate={() => setUpdateData('')}
-        />
-      ) : (
-        <AddTaskForm
-          newTask={newTask}
-          setNewTask={setNewTask}
-          addTask={addTask}
-          newTaskDueDate={newTaskDueDate}
-          setNewTaskDueDate={setNewTaskDueDate}
-          newTaskRepetition={newTaskRepetition}
-          setNewTaskRepetition={setNewTaskRepetition}
-        />
-      )}
+    <br /><br />
+    <h2>To Do List App (ReactJS)</h2>
+    <br /><br />
 
-      {toDo.length ? (
-        <ToDo toDo={toDo} markDone={markDone} setUpdateData={setUpdateData} deleteTask={deleteTask} />
-      ) : (
-        'No Tasks...'
-      )}
+    {updateData && updateData ? (
+      <UpdateForm 
+        updateData={updateData}
+        changeHolder={changeHolder}
+        updateTask={updateTask}
+        cancelUpdate={cancelUpdate}
+      />
+    ) : (
+      <AddTaskForm 
+        newTask={newTask}
+        setNewTask={setNewTask}
+        addTask={addTask}
+      />
+    )}
+
+    {toDo && toDo.length ? '' : 'No Tasks...'}
+
+    <ToDo
+      toDo={toDo}
+      markDone={markDone}
+      setUpdateData={setUpdateData}
+      deleteTask={deleteTask}
+    />  
+
     </div>
   );
 }
